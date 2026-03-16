@@ -9,7 +9,7 @@ TMUX_BIN="${TMUX_AI_NAV_TMUX_BIN:-$(command -v tmux || echo tmux)}"
 CACHE_DIR="/tmp/tmux-ai-nav"
 MY_PANE_ID=$(cat "$CACHE_DIR/sidebar.pane_id" 2>/dev/null)
 
-selected=0
+selected=-1  # -1 = not yet initialized, will be set to current window
 
 # Colors
 BOLD=$(tput bold 2>/dev/null || true)
@@ -18,13 +18,15 @@ GREEN=$(tput setaf 2 2>/dev/null || true)
 CYAN=$(tput setaf 6 2>/dev/null || true)
 YELLOW=$(tput setaf 3 2>/dev/null || true)
 BLUE=$(tput setaf 4 2>/dev/null || true)
-MAGENTA=$(tput setaf 5 2>/dev/null || true)
 WHITE=$(tput setaf 7 2>/dev/null || true)
 RESET=$(tput sgr0 2>/dev/null || true)
 
-# Collect navigable entries: session:window_index targets
-# Each entry maps to a tmux target for jumping
+# Hide cursor to avoid flicker
+tput civis 2>/dev/null || true
+trap 'tput cnorm 2>/dev/null || true' EXIT
+
 declare -a TARGETS=()
+LAST_OUTPUT=""
 
 short_path() {
   local p="${1/#$HOME/\~}"
@@ -38,25 +40,22 @@ short_path() {
 
 build_and_render() {
   TARGETS=()
-  clear
 
   local current_session current_window
   current_session=$("$TMUX_BIN" display-message -p '#{session_name}' 2>/dev/null)
   current_window=$("$TMUX_BIN" display-message -p '#{window_index}' 2>/dev/null)
 
-  # Get all sessions
   local sessions
   sessions=$("$TMUX_BIN" list-sessions -F '#{session_name}' 2>/dev/null) || return
 
+  local output=""
   local idx=0
 
   while read -r sess; do
-    # Session header
     local sess_marker=" "
     [[ "$sess" == "$current_session" ]] && sess_marker="${GREEN}▸${RESET}"
-    printf '%s\n' "${sess_marker} ${BOLD}${CYAN}${sess}${RESET}"
+    output+="${sess_marker} ${BOLD}${CYAN}${sess}${RESET}"$'\n'
 
-    # Windows in this session
     local windows
     windows=$("$TMUX_BIN" list-windows -t "$sess" \
       -F '#{window_index}|#{window_name}|#{window_active}|#{pane_current_path}' 2>/dev/null) || continue
@@ -65,7 +64,11 @@ build_and_render() {
       local target="${sess}:${win_idx}"
       TARGETS+=("$target")
 
-      # Get summary from cache
+      # Auto-select current window on first render
+      if [[ $selected -eq -1 ]] && [[ "$sess" == "$current_session" ]] && [[ "$win_idx" == "$current_window" ]]; then
+        selected=$idx
+      fi
+
       local cache_key="${sess}_${win_idx}"
       local summary_file="$CACHE_DIR/${cache_key}.summary"
       local summary=""
@@ -74,34 +77,42 @@ build_and_render() {
       local sp
       sp=$(short_path "$pane_path" 20)
 
-      # Truncate for sidebar width (28 cols, 6 indent = 22 usable)
       [[ ${#win_name} -gt 20 ]] && win_name="${win_name:0:19}…"
       [[ ${#summary} -gt 20 ]] && summary="${summary:0:19}…"
 
-      # Active window marker
       local active_dot=""
       if [[ "$is_active" == "1" ]] && [[ "$sess" == "$current_session" ]]; then
         active_dot="${GREEN}● ${RESET}"
       fi
 
       if [[ $idx -eq $selected ]]; then
-        printf '%s\n' "  ${BOLD}${WHITE}▸ ${active_dot}${win_idx} ${win_name}${RESET}"
-        [[ -n "$summary" ]] && printf '%s\n' "      ${YELLOW}${summary}${RESET}"
-        printf '%s\n' "      ${BLUE}${sp}${RESET}"
+        output+="  ${BOLD}${WHITE}▸ ${active_dot}${win_idx} ${win_name}${RESET}"$'\n'
+        [[ -n "$summary" ]] && output+="      ${YELLOW}${summary}${RESET}"$'\n'
+        output+="      ${BLUE}${sp}${RESET}"$'\n'
       else
-        printf '%s\n' "    ${active_dot}${DIM}${win_idx} ${win_name}${RESET}"
-        [[ -n "$summary" ]] && printf '%s\n' "      ${DIM}${summary}${RESET}"
-        printf '%s\n' "      ${DIM}${sp}${RESET}"
+        output+="    ${active_dot}${DIM}${win_idx} ${win_name}${RESET}"$'\n'
+        [[ -n "$summary" ]] && output+="      ${DIM}${summary}${RESET}"$'\n'
+        output+="      ${DIM}${sp}${RESET}"$'\n'
       fi
 
       idx=$((idx + 1))
     done <<< "$windows"
 
-    printf '\n'
+    output+=$'\n'
   done <<< "$sessions"
 
-  # Footer
-  printf '%s\n' "${DIM}↑↓/jk nav  ⏎ jump  q hide${RESET}"
+  output+="${DIM}↑↓/jk nav  ⏎ jump  q hide${RESET}"
+
+  # Fallback if selected was never set
+  [[ $selected -eq -1 ]] && selected=0
+
+  # Only redraw if content changed (prevents flicker)
+  if [[ "$output" != "$LAST_OUTPUT" ]]; then
+    LAST_OUTPUT="$output"
+    tput home 2>/dev/null || printf '\033[H'
+    tput ed 2>/dev/null || printf '\033[J'
+    printf '%s\n' "$output"
+  fi
 }
 
 build_and_render
@@ -128,14 +139,13 @@ while true; do
         fi
         ;;
       'q')
-        # Hide sidebar — signal toggle to close us
         "$TMUX_BIN" run-shell "bash '$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/toggle-sidebar.sh'" 2>/dev/null
         exit 0
         ;;
     esac
+    LAST_OUTPUT=""  # Force redraw on keypress
     build_and_render
   else
-    # Timeout — refresh to pick up new titles
     build_and_render
   fi
 done

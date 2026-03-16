@@ -137,9 +137,10 @@ while true; do
         ;;
       'k') selected=$(( (selected - 1 + total) % total )) ;;
       'j') selected=$(( (selected + 1) % total )) ;;
-      '') # Enter — jump to selected window
+      '') # Enter — jump to selected window (works cross-session)
         if [[ $selected -lt $total ]]; then
           target="${TARGETS[$selected]}"
+          "$TMUX_BIN" switch-client -t "$target" 2>/dev/null
           "$TMUX_BIN" select-window -t "$target" 2>/dev/null
         fi
         ;;

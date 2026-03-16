@@ -11,7 +11,8 @@ CLAUDE_BIN="${TMUX_AI_NAV_CLAUDE_BIN:-claude}"
 "$CLAUDE_BIN" -p \
   --model haiku \
   --max-turns 1 \
-  --no-mcps \
+  --mcp-config '{"mcpServers":{}}' \
+  --strict-mcp-config \
   "You summarize terminal panes. Given terminal output, respond with EXACTLY two lines:
 Line 1: A 2-4 word title (used as tmux window name). Be specific and concise.
 Line 2: A one-sentence summary (max 50 chars) adding context.

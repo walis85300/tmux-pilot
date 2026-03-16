@@ -9,6 +9,11 @@ TMUX_BIN="${TMUX_AI_NAV_TMUX_BIN:-$(command -v tmux || echo tmux)}"
 CACHE_DIR="/tmp/tmux-ai-nav"
 MY_PANE_ID=$(cat "$CACHE_DIR/sidebar.pane_id" 2>/dev/null)
 
+# Dynamic truncation based on actual pane width (6 chars indent)
+PANE_WIDTH=$(tput cols 2>/dev/null || echo 28)
+MAX_TEXT=$(( PANE_WIDTH - 8 ))
+[[ $MAX_TEXT -lt 10 ]] && MAX_TEXT=10
+
 selected=-1  # -1 = not yet initialized, will be set to current window
 
 # Colors
@@ -75,10 +80,10 @@ build_and_render() {
       [[ -f "$summary_file" ]] && summary=$(cat "$summary_file")
 
       local sp
-      sp=$(short_path "$pane_path" 20)
+      sp=$(short_path "$pane_path" "$MAX_TEXT")
 
-      [[ ${#win_name} -gt 20 ]] && win_name="${win_name:0:19}…"
-      [[ ${#summary} -gt 20 ]] && summary="${summary:0:19}…"
+      [[ ${#win_name} -gt $MAX_TEXT ]] && win_name="${win_name:0:$((MAX_TEXT - 1))}…"
+      [[ ${#summary} -gt $MAX_TEXT ]] && summary="${summary:0:$((MAX_TEXT - 1))}…"
 
       local active_dot=""
       if [[ "$is_active" == "1" ]] && [[ "$sess" == "$current_session" ]]; then

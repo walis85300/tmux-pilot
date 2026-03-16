@@ -7,8 +7,11 @@ set -uo pipefail
 TMUX_BIN="${TMUX_AI_NAV_TMUX_BIN:-$(command -v tmux || echo tmux)}"
 PLUGIN_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 CACHE_DIR="/tmp/tmux-ai-nav"
-SIDEBAR_WIDTH=28
 SIDEBAR_MARKER="$CACHE_DIR/sidebar.pane_id"
+
+# 25% of current window width
+WINDOW_WIDTH=$("$TMUX_BIN" display-message -p '#{window_width}' 2>/dev/null || echo 120)
+SIDEBAR_WIDTH=$(( WINDOW_WIDTH / 4 ))
 
 # Check if sidebar pane is alive
 sidebar_alive() {

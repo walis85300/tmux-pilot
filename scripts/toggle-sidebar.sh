@@ -30,7 +30,7 @@ else
 
   # split-window -P returns the new pane ID. We write it to the marker file
   # BEFORE the sidebar script reads it.
-  new_pane=$("$TMUX_BIN" split-window -hb -l "$SIDEBAR_WIDTH" -P -F '#{pane_id}' \
+  new_pane=$("$TMUX_BIN" split-window -hbf -l "$SIDEBAR_WIDTH" -P -F '#{pane_id}' \
     "sleep 0.3 && exec bash '${PLUGIN_DIR}/scripts/sidebar.sh'")
 
   printf '%s' "$new_pane" > "$SIDEBAR_MARKER"

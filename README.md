@@ -2,30 +2,30 @@
 
 > Your tmux copilot. Never lose track of what's running where.
 
-**tmux-pilot** uses [Claude Code](https://docs.anthropic.com/en/docs/claude-code) to read your terminal output and automatically name your tmux windows with what's actually happening in them — not just "bash" or "zsh".
+**tmux-pilot** uses [Claude Code](https://docs.anthropic.com/en/docs/claude-code) to read your terminal output and name your tmux windows with what's actually happening in them — not just "bash" or "zsh".
 
-It also adds a **persistent sidebar** you can toggle anytime, showing all your sessions and windows at a glance with AI-generated titles, one-line summaries, and working directories.
+Titles are generated **once** (5 minutes after a window opens) and stay put. No background daemon eating tokens. You're in control.
 
 ```
-┌──────────────────────┬──────────────────────────────────────────────────┐
-│ ▸ work               │                                                  │
-│   ▸ 1 pytest auth    │  $ pytest tests/auth/ -v                         │
-│       3 failing       │  FAILED tests/auth/test_jwt.py::test_refresh     │
-│       ~/projects/api  │  FAILED tests/auth/test_jwt.py::test_expire      │
-│                       │  ...                                             │
-│     2 docker compose  │                                                  │
-│       All services up │                                                  │
-│       ~/projects/app  │                                                  │
-│                       │                                                  │
-│   personal            │                                                  │
-│   ● 1 vim README.md  │                                                  │
-│       Drafting v2 doc │                                                  │
-│       ~/oss/my-proj   │                                                  │
-│                       │                                                  │
-│ ↑↓/jk nav ⏎ jump     │                                                  │
-│ q hide                │                                                  │
-└──────────────────────┴──────────────────────────────────────────────────┘
- 1  pytest auth    2  docker compose                    ← AI-named status bar
+┌──────────────────────────┬───────────────────────────────────────────┐
+│ ▸ work                   │                                           │
+│   ▸ 1 pytest auth tests  │  $ pytest tests/auth/ -v                  │
+│       3 failing, fixing…  │  FAILED test_jwt.py::test_refresh         │
+│       ~/projects/api      │  ...                                      │
+│                           │                                           │
+│     2 docker compose up   │                                           │
+│       All services green  │                                           │
+│       ~/projects/app      │                                           │
+│                           │                                           │
+│   personal                │                                           │
+│   ● 1 vim README.md      │                                           │
+│       Drafting v2 docs    │                                           │
+│       ~/oss/my-proj       │                                           │
+│                           │                                           │
+│ ↑↓/jk nav  ⏎ jump        │                                           │
+│ q hide                    │                                           │
+└──────────────────────────┴───────────────────────────────────────────┘
+ 1  pytest auth tests    2  docker compose up            ← status bar
 ```
 
 ## Before & After
@@ -36,16 +36,27 @@ It also adds a **persistent sidebar** you can toggle anytime, showing all your s
 | `prefix+w` shows "bash" everywhere | `prefix+w` shows meaningful names |
 | You forgot what's in window 4 | The sidebar tells you instantly |
 
+## How titles work
+
+| Event | What happens |
+|---|---|
+| New window created | Title is generated **once**, 5 min later |
+| `prefix + Alt-n` | Regenerate title for current window now |
+| `prefix + Alt-r` | Manually rename + **pin** (never auto-overwritten) |
+| Pinned window + scheduled generation | Skipped — your name wins |
+| `prefix + Alt-n` on pinned window | Unpins and regenerates |
+
+No daemon. No polling loop. One API call per window, ever.
+
 ## Requirements
 
 - **tmux** >= 3.0
 - **bash** >= 4.0
-- **[Claude Code](https://docs.anthropic.com/en/docs/claude-code)** — installed and authenticated
+- **[Claude Code](https://docs.anthropic.com/en/docs/claude-code)** installed and authenticated
 
 ```sh
-# Install Claude Code (pick one)
+# Install Claude Code
 npm install -g @anthropic-ai/claude-code
-brew install claude-code
 
 # Authenticate (one time)
 claude
@@ -55,17 +66,16 @@ claude
 
 ### With [TPM](https://github.com/tmux-plugins/tpm)
 
-Add to `~/.tmux.conf`. **Must go after** the TPM `run` line:
+Add to `~/.tmux.conf` **after** the TPM `run` line:
 
 ```tmux
 run '~/.tmux/plugins/tpm/tpm'
 
-# tmux-pilot
 set -g @plugin 'walis85300/tmux-pilot'
 run-shell '~/.tmux/plugins/tmux-pilot/tmux-ai-nav.tmux'
 ```
 
-Install with `prefix + I`, then reload:
+Press `prefix + I` to install, then reload:
 
 ```sh
 tmux source-file ~/.tmux.conf
@@ -83,22 +93,13 @@ Add to `~/.tmux.conf` (after TPM if you use it):
 run-shell '~/.tmux/plugins/tmux-pilot/tmux-ai-nav.tmux'
 ```
 
-Reload:
-
-```sh
-tmux source-file ~/.tmux.conf
-```
-
-That's it. The AI daemon starts automatically and begins renaming your windows.
-
-## Usage
-
-### Keybindings
+## Keybindings
 
 | Key | Action |
 |---|---|
-| `prefix + Tab` | Toggle the sidebar |
-| `prefix + Alt-n` | Turn AI daemon on/off |
+| `prefix + Tab` | Toggle sidebar |
+| `prefix + Alt-n` | Regenerate AI title for current window |
+| `prefix + Alt-r` | Manually rename and pin current window |
 
 ### Sidebar navigation
 
@@ -109,70 +110,56 @@ That's it. The AI daemon starts automatically and begins renaming your windows.
 | `Enter` | Jump to window |
 | `q` | Hide sidebar |
 
-### How it works
-
-1. A background daemon wakes up every 15 seconds
-2. For each window, it captures the last 30 lines of the active pane
-3. If the content changed since last check (via md5 hash), it calls `claude -p --model haiku`
-4. Claude returns a short title + one-line summary
-5. The daemon renames the window with `tmux rename-window`
-6. Titles persist to disk and restore on tmux restart
-
-The sidebar reads the same cached titles and renders them in a `choose-tree`-style panel on the left side of your terminal.
-
 ## Configuration
 
-Optional environment variables (set in your shell profile):
-
 ```sh
-# How often to refresh titles (default: 15 seconds)
-export TMUX_AI_NAV_REFRESH=15
+# Delay before auto-generating title (default: 300 = 5 min)
+export TMUX_AI_NAV_DELAY=300
 
-# Custom claude binary path
+# Custom claude binary
 export TMUX_AI_NAV_CLAUDE_BIN=claude
 
-# Custom tmux binary path
+# Custom tmux binary
 export TMUX_AI_NAV_TMUX_BIN=tmux
 ```
 
+## Architecture
+
+```
+tmux-ai-nav.tmux            # Entry point: keybindings + hooks
+scripts/
+  schedule.sh                # Sleeps N seconds, then calls generate-title.sh
+  generate-title.sh          # Captures pane → calls Claude → renames window
+  refresh.sh                 # Manual trigger: regenerate title for current window
+  rename.sh                  # Manual rename + pin (blocks auto-overwrite)
+  toggle-sidebar.sh          # Show/hide the sidebar panel
+  sidebar.sh                 # Interactive sidebar UI
+lib/
+  api.sh                     # claude -p --model haiku wrapper
+```
+
+**Cache** lives in `/tmp/tmux-ai-nav/`:
+- `{session}_{window}.title` — AI-generated title
+- `{session}_{window}.summary` — One-line summary
+- `{session}_{window}.pinned` — Marker: this title was set manually
+
 ## Troubleshooting
 
-**Titles not appearing?**
-
 ```sh
-# Check if daemon is running
-cat /tmp/tmux-ai-nav/daemon.pid && ps -p $(cat /tmp/tmux-ai-nav/daemon.pid)
-
 # Check the log
 cat /tmp/tmux-ai-nav/daemon.log
 
+# Manually generate a title right now
+bash ~/.tmux/plugins/tmux-pilot/scripts/refresh.sh
+
 # Verify claude works
 claude -p --model haiku "say hello"
+
+# Reset everything
+rm -rf /tmp/tmux-ai-nav && tmux source-file ~/.tmux.conf
 ```
 
-**Sidebar keybinding lost after reload?**
-
-Make sure the `run-shell` line is **after** `run '~/.tmux/plugins/tpm/tpm'` in your tmux.conf. TPM resets keybindings when it loads.
-
-**Want to reset all titles?**
-
-```sh
-rm -rf /tmp/tmux-ai-nav
-# Then prefix + Alt-n twice (off, then on) to restart the daemon
-```
-
-## Project structure
-
-```
-tmux-ai-nav.tmux           # Entry point: keybindings + auto-start daemon
-scripts/
-  daemon.sh                 # Background loop: capture → hash → claude → rename
-  sidebar.sh                # Interactive sidebar UI (runs inside a tmux pane)
-  toggle-sidebar.sh         # Open/close the sidebar
-  toggle.sh                 # Start/stop the AI daemon
-lib/
-  api.sh                    # Claude Code headless wrapper
-```
+**Keybinding lost after reload?** Make sure `run-shell` is **after** `run '~/.tmux/plugins/tpm/tpm'`.
 
 ## License
 

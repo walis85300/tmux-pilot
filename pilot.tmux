@@ -37,6 +37,12 @@ fi
 "$TMUX_BIN" bind-key "$KEY_TITLE"   run-shell "bash '${CURRENT_DIR}/scripts/refresh.sh'"
 "$TMUX_BIN" bind-key "$KEY_RENAME"  run-shell "bash '${CURRENT_DIR}/scripts/rename.sh'"
 
+# Protect sidebar from splits — override split keybindings
+"$TMUX_BIN" bind-key v run-shell "bash '${CURRENT_DIR}/scripts/safe-split.sh' -h"
+"$TMUX_BIN" bind-key s run-shell "bash '${CURRENT_DIR}/scripts/safe-split.sh' -v"
+"$TMUX_BIN" bind-key '"' run-shell "bash '${CURRENT_DIR}/scripts/safe-split.sh' -v"
+"$TMUX_BIN" bind-key '%' run-shell "bash '${CURRENT_DIR}/scripts/safe-split.sh' -h"
+
 # Fuzzy finder: use display-popup if tmux >= 3.2, otherwise fall back to run-shell
 if tmux_version_ge "3.2"; then
   "$TMUX_BIN" bind-key "$KEY_FUZZY" display-popup -E -w 80% -h 60% -T " Jump to window " \
@@ -56,12 +62,15 @@ fi
 
 # Signal sidebar to redraw on relevant events (non-blocking with -b)
 SIDEBAR_SIGNAL="run-shell -b 'PF=${CACHE_DIR}/sidebar.pid; [ -f \$PF ] && kill -USR1 \$(cat \$PF) 2>/dev/null || true'"
-"$TMUX_BIN" set-hook -g window-renamed       "$SIDEBAR_SIGNAL"
-"$TMUX_BIN" set-hook -g after-select-window   "$SIDEBAR_SIGNAL"
-"$TMUX_BIN" set-hook -g after-select-pane     "$SIDEBAR_SIGNAL"
-"$TMUX_BIN" set-hook -g after-split-window    "$SIDEBAR_SIGNAL"
-"$TMUX_BIN" set-hook -g after-kill-pane       "$SIDEBAR_SIGNAL"
-"$TMUX_BIN" set-hook -g pane-focus-in         "$SIDEBAR_SIGNAL"
+SIDEBAR_RELOCATE="run-shell -b 'bash ${CURRENT_DIR}/scripts/relocate-sidebar.sh'"
+"$TMUX_BIN" set-hook -g window-renamed           "$SIDEBAR_SIGNAL"
+"$TMUX_BIN" set-hook -g after-select-pane        "$SIDEBAR_SIGNAL"
+"$TMUX_BIN" set-hook -g after-split-window       "$SIDEBAR_SIGNAL"
+"$TMUX_BIN" set-hook -g after-kill-pane          "$SIDEBAR_SIGNAL"
+"$TMUX_BIN" set-hook -g pane-focus-in            "$SIDEBAR_SIGNAL"
+# Auto-relocate sidebar when switching windows or sessions
+"$TMUX_BIN" set-hook -g after-select-window      "$SIDEBAR_RELOCATE"
+"$TMUX_BIN" set-hook -g client-session-changed    "$SIDEBAR_RELOCATE"
 
 # Cleanup on session close (non-blocking with -b)
 "$TMUX_BIN" set-hook -g session-closed \

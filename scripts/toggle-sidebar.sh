@@ -11,9 +11,8 @@ PLUGIN_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 CACHE_DIR=$(get_state_dir)
 SIDEBAR_MARKER="$CACHE_DIR/sidebar.pane_id"
 
-# 25% of current window width
-WINDOW_WIDTH=$("$TMUX_BIN" display-message -p '#{window_width}' 2>/dev/null || echo 120)
-SIDEBAR_WIDTH=$(( WINDOW_WIDTH / 4 ))
+# Sidebar width: configurable, defaults to 35 columns
+SIDEBAR_WIDTH=$(get_tmux_option "@pilot-sidebar-width" "35")
 
 # Get current window ID to check if sidebar is local
 CURRENT_WINDOW=$("$TMUX_BIN" display-message -p '#{window_id}' 2>/dev/null)

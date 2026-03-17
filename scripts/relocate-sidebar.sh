@@ -26,8 +26,7 @@ fi
 "$TMUX_BIN" list-panes -F '#{pane_id}' 2>/dev/null | grep -q "^${sid}$" && exit 0
 
 # Move sidebar to current window (leftmost, horizontal split)
-WINDOW_WIDTH=$("$TMUX_BIN" display-message -p '#{window_width}' 2>/dev/null || echo 120)
-SIDEBAR_WIDTH=$(( WINDOW_WIDTH / 4 ))
+SIDEBAR_WIDTH=$(get_tmux_option "@pilot-sidebar-width" "35")
 
 "$TMUX_BIN" join-pane -hb -l "$SIDEBAR_WIDTH" -s "$sid" 2>/dev/null || exit 0
 

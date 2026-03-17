@@ -68,6 +68,10 @@ SIDEBAR_RELOCATE="run-shell -b 'bash ${CURRENT_DIR}/scripts/relocate-sidebar.sh'
 "$TMUX_BIN" set-hook -g after-split-window       "$SIDEBAR_SIGNAL"
 "$TMUX_BIN" set-hook -g after-kill-pane          "$SIDEBAR_SIGNAL"
 "$TMUX_BIN" set-hook -g pane-focus-in            "$SIDEBAR_SIGNAL"
+# Enforce sidebar width on terminal resize
+SIDEBAR_RESIZE="run-shell -b 'SF=${CACHE_DIR}/sidebar.pane_id; [ -f \$SF ] && tmux resize-pane -t \$(cat \$SF) -x $(get_tmux_option "@pilot-sidebar-width" "35") 2>/dev/null || true'"
+"$TMUX_BIN" set-hook -g window-resized           "$SIDEBAR_RESIZE"
+"$TMUX_BIN" set-hook -g client-resized           "$SIDEBAR_RESIZE"
 # Auto-relocate sidebar when switching windows or sessions
 "$TMUX_BIN" set-hook -g after-select-window      "$SIDEBAR_RELOCATE"
 "$TMUX_BIN" set-hook -g client-session-changed    "$SIDEBAR_RELOCATE"

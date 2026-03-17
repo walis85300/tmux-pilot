@@ -428,7 +428,6 @@ while true; do
             # Window target: check pane count (subtract sidebar if present)
             pane_count=$("$TMUX_BIN" list-panes -t "$target" 2>/dev/null | wc -l | tr -d ' ')
             if [[ -n "$MY_PANE_ID" ]]; then
-              local sidebar_here
               sidebar_here=$("$TMUX_BIN" list-panes -t "$target" -F '#{pane_id}' 2>/dev/null | grep -c "^${MY_PANE_ID}$")
               pane_count=$((pane_count - sidebar_here))
             fi
@@ -499,7 +498,7 @@ while true; do
               "$TMUX_BIN" select-window -t "$fz_target" 2>/dev/null
             elif [[ "$action" == "SELECT" ]]; then
               # Find target index in TARGETS array and move cursor
-              local i=0
+              i=0
               for t in "${TARGETS[@]}"; do
                 if [[ "$t" == "$fz_target" ]]; then
                   selected=$i

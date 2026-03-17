@@ -3,8 +3,8 @@
 #
 # Keybindings:
 #   prefix + Tab   → toggle sidebar
-#   prefix + Alt-n → regenerate AI title for current window
-#   prefix + Alt-r → manually rename and pin current window title
+#   prefix + T     → regenerate AI title for current window
+#   prefix + R     → manually rename and pin current window title
 #
 # A background daemon titles new windows automatically (once per window, never again).
 
@@ -28,6 +28,16 @@ if ! { [[ -f "$PID_FILE" ]] && kill -0 "$(cat "$PID_FILE" 2>/dev/null)" 2>/dev/n
   disown $! 2>/dev/null || true
 fi
 
+# Signal sidebar to redraw on relevant events
+SIDEBAR_SIGNAL="run-shell 'PF=${CACHE_DIR}/sidebar.pid; [ -f \$PF ] && kill -USR1 \$(cat \$PF) 2>/dev/null || true'"
+"$TMUX_BIN" set-hook -g window-renamed "$SIDEBAR_SIGNAL"
+"$TMUX_BIN" set-hook -g after-select-window "$SIDEBAR_SIGNAL"
+"$TMUX_BIN" set-hook -g after-select-pane "$SIDEBAR_SIGNAL"
+"$TMUX_BIN" set-hook -g after-split-window "$SIDEBAR_SIGNAL"
+"$TMUX_BIN" set-hook -g after-kill-pane "$SIDEBAR_SIGNAL"
+"$TMUX_BIN" set-hook -g pane-focus-in "$SIDEBAR_SIGNAL"
+
 # Cleanup on session close
 "$TMUX_BIN" set-hook -g session-closed \
-  "run-shell 'PF=${CACHE_DIR}/daemon.pid; [ -f \$PF ] && kill \$(cat \$PF) 2>/dev/null; rm -f \$PF'"
+  "run-shell 'PF=${CACHE_DIR}/daemon.pid; [ -f \$PF ] && kill \$(cat \$PF) 2>/dev/null; rm -f \$PF; \
+              PF2=${CACHE_DIR}/sidebar.pid; [ -f \$PF2 ] && rm -f \$PF2'"

@@ -36,14 +36,28 @@ if ! "$TMUX_BIN" list-windows -t "$SESSION" -F '#{window_index}' 2>/dev/null | g
   exit 0
 fi
 
-# Get the active pane in this window
-active_pane=$("$TMUX_BIN" list-panes -t "${SESSION}:${WINDOW_IDX}" \
-  -F '#{pane_id} #{pane_active}' 2>/dev/null | grep ' 1$' | cut -d' ' -f1)
+# Get all panes in this window
+pane_list=$("$TMUX_BIN" list-panes -t "${SESSION}:${WINDOW_IDX}" \
+  -F '#{pane_id}|#{pane_index}|#{pane_active}' 2>/dev/null) || exit 0
 
-[[ -z "$active_pane" ]] && exit 0
+pane_count=$(echo "$pane_list" | wc -l | tr -d ' ')
 
-# Capture last 30 lines
-content=$("$TMUX_BIN" capture-pane -p -t "$active_pane" -S -30 2>/dev/null) || exit 0
+if [[ "$pane_count" -le 1 ]]; then
+  # Single pane: capture 30 lines from active pane
+  active_pane=$(echo "$pane_list" | grep '|1$' | cut -d'|' -f1)
+  [[ -z "$active_pane" ]] && exit 0
+  content=$("$TMUX_BIN" capture-pane -p -t "$active_pane" -S -30 2>/dev/null) || exit 0
+else
+  # Multiple panes: capture 15 lines from each for a holistic summary
+  content="Window has ${pane_count} panes:"$'\n'
+  while IFS='|' read -r pane_id pane_idx pane_active; do
+    [[ -z "$pane_id" ]] && continue
+    label="[Pane ${pane_idx}]"
+    [[ "$pane_active" == "1" ]] && label="[Pane ${pane_idx} - active]"
+    pane_content=$("$TMUX_BIN" capture-pane -p -t "$pane_id" -S -15 2>/dev/null) || pane_content="(empty)"
+    content+=$'\n'"${label}"$'\n'"${pane_content}"$'\n'
+  done <<< "$pane_list"
+fi
 
 log "Generating title for ${SESSION}:${WINDOW_IDX}..."
 

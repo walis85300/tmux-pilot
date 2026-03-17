@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # sidebar.sh — Persistent left panel showing all windows/panes with AI titles.
-# Renders in choose-tree style. Navigable with j/k/arrows, Enter to jump.
+# Renders in choose-tree style. Navigable with j/k/arrows, Enter to jump/expand.
+# Multi-pane windows can be expanded to show individual panes.
 # Reads its own pane ID from the marker file.
 
 set -uo pipefail
@@ -15,6 +16,7 @@ MAX_TEXT=$(( PANE_WIDTH - 8 ))
 [[ $MAX_TEXT -lt 10 ]] && MAX_TEXT=10
 
 selected=-1  # -1 = not yet initialized, will be set to current window
+declare -A EXPANDED=()
 
 # Colors
 BOLD=$(tput bold 2>/dev/null || true)
@@ -63,10 +65,18 @@ build_and_render() {
 
     local windows
     windows=$("$TMUX_BIN" list-windows -t "$sess" \
-      -F '#{window_index}|#{window_name}|#{window_active}|#{pane_current_path}' 2>/dev/null) || continue
+      -F '#{window_index}|#{window_name}|#{window_active}|#{pane_current_path}|#{window_panes}' 2>/dev/null) || continue
 
-    while IFS='|' read -r win_idx win_name is_active pane_path; do
+    while IFS='|' read -r win_idx win_name is_active pane_path pane_count; do
       local target="${sess}:${win_idx}"
+
+      # Subtract sidebar pane from count if it lives in this window
+      if [[ -n "$MY_PANE_ID" ]]; then
+        local sidebar_in_window
+        sidebar_in_window=$("$TMUX_BIN" list-panes -t "$target" -F '#{pane_id}' 2>/dev/null | grep -c "^${MY_PANE_ID}$")
+        pane_count=$((pane_count - sidebar_in_window))
+      fi
+
       TARGETS+=("$target")
 
       # Auto-select current window on first render
@@ -90,26 +100,88 @@ build_and_render() {
         active_dot="${GREEN}● ${RESET}"
       fi
 
+      # Pane count badge
+      local badge=""
+      [[ "$pane_count" -gt 1 ]] && badge=" ${DIM}[${pane_count}]${RESET}"
+
+      local is_expanded="${EXPANDED[${target}]:-}"
+
+      # Expand/collapse indicator for multi-pane windows
+      local expand_icon=""
+      if [[ "$pane_count" -gt 1 ]]; then
+        if [[ "$is_expanded" == "1" ]]; then
+          expand_icon="▾ "
+        else
+          expand_icon="▸ "
+        fi
+      fi
+
       if [[ $idx -eq $selected ]]; then
-        output+="  ${BOLD}${WHITE}▸ ${active_dot}${win_idx} ${win_name}${RESET}"$'\n'
+        output+="  ${BOLD}${WHITE}▸ ${active_dot}${expand_icon}${win_idx} ${win_name}${badge}${RESET}"$'\n'
         [[ -n "$summary" ]] && output+="      ${YELLOW}${summary}${RESET}"$'\n'
         output+="      ${BLUE}${sp}${RESET}"$'\n'
       else
-        output+="    ${active_dot}${DIM}${win_idx} ${win_name}${RESET}"$'\n'
+        output+="    ${active_dot}${DIM}${expand_icon}${win_idx} ${win_name}${badge}${RESET}"$'\n'
         [[ -n "$summary" ]] && output+="      ${DIM}${summary}${RESET}"$'\n'
         output+="      ${DIM}${sp}${RESET}"$'\n'
       fi
 
       idx=$((idx + 1))
+
+      # Render expanded panes
+      if [[ "$is_expanded" == "1" ]] && [[ "$pane_count" -gt 1 ]]; then
+        local panes
+        panes=$("$TMUX_BIN" list-panes -t "$target" \
+          -F '#{pane_id}|#{pane_index}|#{pane_current_command}|#{pane_current_path}|#{pane_active}' 2>/dev/null) || true
+
+        local pane_lines=()
+        while IFS='|' read -r p_id p_idx p_cmd p_path p_active; do
+          [[ -z "$p_idx" ]] && continue
+          # Skip the sidebar pane itself
+          [[ -n "$MY_PANE_ID" ]] && [[ "$p_id" == "$MY_PANE_ID" ]] && continue
+          pane_lines+=("${p_idx}|${p_cmd}|${p_path}|${p_active}")
+        done <<< "$panes"
+
+        local pane_total=${#pane_lines[@]}
+        local pi=0
+        for pline in "${pane_lines[@]}"; do
+          IFS='|' read -r p_idx p_cmd p_path p_active <<< "$pline"
+          local pane_target="${target}.${p_idx}"
+          TARGETS+=("$pane_target")
+
+          local connector="├─"
+          [[ $pi -eq $((pane_total - 1)) ]] && connector="└─"
+
+          local psp
+          psp=$(short_path "$p_path" "$((MAX_TEXT - 10))")
+
+          local pane_active_marker=""
+          [[ "$p_active" == "1" ]] && pane_active_marker="${GREEN}●${RESET} "
+
+          if [[ $idx -eq $selected ]]; then
+            output+="      ${BOLD}${WHITE}${connector} ${pane_active_marker}${p_idx} ${p_cmd}  ${psp}${RESET}"$'\n'
+          else
+            output+="      ${DIM}${connector} ${pane_active_marker}${p_idx} ${p_cmd}  ${psp}${RESET}"$'\n'
+          fi
+
+          idx=$((idx + 1))
+          pi=$((pi + 1))
+        done
+      fi
+
     done <<< "$windows"
 
     output+=$'\n'
   done <<< "$sessions"
 
-  output+="${DIM}↑↓/jk nav  ⏎ jump  q hide${RESET}"
+  output+="${DIM}↑↓/jk nav  ⏎ expand/jump  Esc collapse  q hide${RESET}"
 
   # Fallback if selected was never set
   [[ $selected -eq -1 ]] && selected=0
+
+  # Clamp selected if targets shrank (e.g. after collapse)
+  local total_targets=${#TARGETS[@]}
+  [[ $total_targets -gt 0 ]] && [[ $selected -ge $total_targets ]] && selected=$((total_targets - 1))
 
   # Only redraw if content changed (prevents flicker)
   if [[ "$output" != "$LAST_OUTPUT" ]]; then
@@ -133,15 +205,38 @@ while true; do
         case "$seq" in
           '[A') selected=$(( (selected - 1 + total) % total )) ;;
           '[B') selected=$(( (selected + 1) % total )) ;;
+          '') # Bare Escape: collapse all expanded windows
+            EXPANDED=()
+            ;;
         esac
         ;;
       'k') selected=$(( (selected - 1 + total) % total )) ;;
       'j') selected=$(( (selected + 1) % total )) ;;
-      '') # Enter — jump to selected window (works cross-session)
+      '') # Enter — expand/collapse or jump
         if [[ $selected -lt $total ]]; then
           target="${TARGETS[$selected]}"
-          "$TMUX_BIN" switch-client -t "$target" 2>/dev/null
-          "$TMUX_BIN" select-window -t "$target" 2>/dev/null
+          if [[ "$target" == *.* ]]; then
+            # Pane target: jump to that specific pane
+            local_win="${target%%.*}"
+            "$TMUX_BIN" switch-client -t "$local_win" 2>/dev/null
+            "$TMUX_BIN" select-window -t "$local_win" 2>/dev/null
+            "$TMUX_BIN" select-pane -t "$target" 2>/dev/null
+          else
+            # Window target: check pane count
+            pane_count=$("$TMUX_BIN" list-panes -t "$target" 2>/dev/null | wc -l | tr -d ' ')
+            if [[ "$pane_count" -gt 1 ]]; then
+              # Toggle expand/collapse
+              if [[ "${EXPANDED[${target}]:-}" == "1" ]]; then
+                unset 'EXPANDED[${target}]'
+              else
+                EXPANDED["$target"]="1"
+              fi
+            else
+              # Single pane: jump directly
+              "$TMUX_BIN" switch-client -t "$target" 2>/dev/null
+              "$TMUX_BIN" select-window -t "$target" 2>/dev/null
+            fi
+          fi
         fi
         ;;
       'q')

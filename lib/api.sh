@@ -17,6 +17,8 @@ CLAUDE_BIN="${TMUX_AI_NAV_CLAUDE_BIN:-claude}"
 Line 1: A 2-4 word title (used as tmux window name). Be specific and concise.
 Line 2: A one-sentence summary (max 50 chars) adding context.
 
+If multiple panes are shown, generate a holistic title and summary covering the main activity across all panes.
+
 Good examples:
 pytest auth tests
 3 failing, fixing JWT validation
@@ -26,6 +28,9 @@ Adding pagination to /users endpoint
 
 zsh ~/projects/app
 Idle shell, last ran docker compose
+
+Auth feature dev
+Editing controller, API on :3000, tests passing
 
 ONLY output the two lines. No formatting, no quotes, no explanation.
 

@@ -6,8 +6,10 @@
 
 set -uo pipefail
 
-TMUX_BIN="${TMUX_AI_NAV_TMUX_BIN:-$(command -v tmux || echo tmux)}"
-CACHE_DIR="/tmp/tmux-ai-nav"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/helpers.sh"
+
+CACHE_DIR=$(get_state_dir)
 MY_PANE_ID=$(cat "$CACHE_DIR/sidebar.pane_id" 2>/dev/null)
 
 # Dynamic truncation based on actual pane width (6 chars indent)

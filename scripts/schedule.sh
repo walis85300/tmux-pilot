@@ -5,7 +5,10 @@
 
 set -uo pipefail
 
-PLUGIN_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/helpers.sh"
+
+PLUGIN_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 DELAY="${TMUX_AI_NAV_DELAY:-300}"  # 5 minutes default
 
 SESSION="$1"

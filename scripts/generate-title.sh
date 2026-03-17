@@ -5,9 +5,11 @@
 
 set -uo pipefail
 
-TMUX_BIN="${TMUX_AI_NAV_TMUX_BIN:-$(command -v tmux || echo tmux)}"
-PLUGIN_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-CACHE_DIR="/tmp/tmux-ai-nav"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/helpers.sh"
+
+PLUGIN_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
+CACHE_DIR=$(get_state_dir)
 LOG_FILE="$CACHE_DIR/daemon.log"
 
 SESSION="$1"

@@ -83,7 +83,7 @@ Add to `~/.tmux.conf` **after** the TPM `run` line:
 set -g @plugin 'walis85300/tmux-pilot'
 run '~/.tmux/plugins/tpm/tpm'
 
-run-shell '~/.tmux/plugins/tmux-pilot/tmux-ai-nav.tmux'
+run-shell '~/.tmux/plugins/tmux-pilot/pilot.tmux'
 ```
 
 Press `prefix + I` to install, then reload:
@@ -101,7 +101,7 @@ git clone https://github.com/walis85300/tmux-pilot ~/.tmux/plugins/tmux-pilot
 Add to `~/.tmux.conf` (after TPM if you use it):
 
 ```tmux
-run-shell '~/.tmux/plugins/tmux-pilot/tmux-ai-nav.tmux'
+run-shell '~/.tmux/plugins/tmux-pilot/pilot.tmux'
 ```
 
 ## Keybindings
@@ -159,6 +159,19 @@ tmux hooks trigger sidebar redraws immediately when you switch windows, split pa
 
 ## Configuration
 
+### Keybindings
+
+All keybindings are configurable via tmux user options. Add to `~/.tmux.conf` **before** the `run-shell` line:
+
+```tmux
+set -g @pilot-key-sidebar "Tab"   # Toggle sidebar (default: Tab)
+set -g @pilot-key-title   "T"     # Regenerate AI title (default: T)
+set -g @pilot-key-rename  "R"     # Manual rename & pin (default: R)
+set -g @pilot-key-fuzzy   "F"     # Fuzzy find windows (default: F)
+```
+
+### Advanced
+
 ```sh
 # Delay before auto-generating title (default: 300 = 5 min)
 export TMUX_AI_NAV_DELAY=300
@@ -173,7 +186,7 @@ export TMUX_AI_NAV_TMUX_BIN=tmux
 ## Architecture
 
 ```
-tmux-ai-nav.tmux            # Entry point: keybindings + hooks + dep checks
+pilot.tmux                   # Entry point: keybindings + hooks + dep checks
 scripts/
   toggle-sidebar.sh          # Show/hide/move the sidebar panel
   sidebar.sh                 # Interactive sidebar UI with navigation
@@ -187,7 +200,7 @@ lib/
   api.sh                     # claude -p --model haiku wrapper
 ```
 
-**Cache** lives in `/tmp/tmux-ai-nav/`:
+**Cache** lives in `~/.local/state/tmux-pilot/` (XDG-compliant, customizable via `$XDG_STATE_HOME`):
 - `{session}_{window}.title` — AI-generated title
 - `{session}_{window}.summary` — One-line summary
 - `{session}_{window}.pinned` — Marker: this title was set manually
@@ -199,7 +212,7 @@ lib/
 
 ```sh
 # Check the log
-cat /tmp/tmux-ai-nav/daemon.log
+cat ~/.local/state/tmux-pilot/daemon.log
 
 # Manually generate a title right now
 bash ~/.tmux/plugins/tmux-pilot/scripts/refresh.sh
@@ -211,7 +224,7 @@ claude -p --model haiku "say hello"
 echo "test" | fzf
 
 # Reset everything
-rm -rf /tmp/tmux-ai-nav && tmux source-file ~/.tmux.conf
+rm -rf ~/.local/state/tmux-pilot && tmux source-file ~/.tmux.conf
 ```
 
 **Keybinding lost after reload?** Make sure `run-shell` is **after** `run '~/.tmux/plugins/tpm/tpm'`.

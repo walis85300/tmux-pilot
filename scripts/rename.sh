@@ -5,8 +5,10 @@
 
 set -uo pipefail
 
-TMUX_BIN="${TMUX_AI_NAV_TMUX_BIN:-$(command -v tmux || echo tmux)}"
-CACHE_DIR="/tmp/tmux-ai-nav"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/helpers.sh"
+
+CACHE_DIR=$(get_state_dir)
 
 SESSION=$("$TMUX_BIN" display-message -p '#{session_name}')
 WINDOW_IDX=$("$TMUX_BIN" display-message -p '#{window_index}')

@@ -16,8 +16,8 @@ PID_FILE="$CACHE_DIR/daemon.pid"
 mkdir -p "$CACHE_DIR"
 
 "$TMUX_BIN" bind-key Tab run-shell "bash '${CURRENT_DIR}/scripts/toggle-sidebar.sh'"
-"$TMUX_BIN" bind-key M-n run-shell "bash '${CURRENT_DIR}/scripts/refresh.sh'"
-"$TMUX_BIN" bind-key M-r run-shell "bash '${CURRENT_DIR}/scripts/rename.sh'"
+"$TMUX_BIN" bind-key T run-shell "bash '${CURRENT_DIR}/scripts/refresh.sh'"
+"$TMUX_BIN" bind-key R run-shell "bash '${CURRENT_DIR}/scripts/rename.sh'"
 
 # Auto-start daemon if not already running
 if ! { [[ -f "$PID_FILE" ]] && kill -0 "$(cat "$PID_FILE" 2>/dev/null)" 2>/dev/null; }; then

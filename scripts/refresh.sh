@@ -19,9 +19,5 @@ rm -f "$CACHE_DIR/${cache_key}.pinned"
 
 "$TMUX_BIN" display-message "Generating title..." 2>/dev/null
 
-# Run in background so tmux doesn't block
-(
-  trap '' HUP
-  bash "$PLUGIN_DIR/scripts/generate-title.sh" "$SESSION" "$WINDOW_IDX" </dev/null >/dev/null 2>&1
-) &
-disown $! 2>/dev/null || true
+# Run fully detached so tmux's run-shell returns immediately
+nohup bash "$PLUGIN_DIR/scripts/generate-title.sh" "$SESSION" "$WINDOW_IDX" </dev/null >/dev/null 2>&1 &

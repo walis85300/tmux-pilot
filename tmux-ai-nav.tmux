@@ -5,6 +5,7 @@
 #   prefix + Tab   → toggle sidebar
 #   prefix + T     → regenerate AI title for current window
 #   prefix + R     → manually rename and pin current window title
+#   prefix + F     → fuzzy find windows (standalone, no sidebar needed)
 #
 # A background daemon titles new windows automatically (once per window, never again).
 
@@ -15,9 +16,20 @@ PID_FILE="$CACHE_DIR/daemon.pid"
 
 mkdir -p "$CACHE_DIR"
 
+# Dependency checks
+CLAUDE_BIN="${TMUX_AI_NAV_CLAUDE_BIN:-claude}"
+if ! command -v "$CLAUDE_BIN" >/dev/null 2>&1; then
+  "$TMUX_BIN" display-message "tmux-pilot: claude not found. Install: npm install -g @anthropic-ai/claude-code"
+fi
+if ! command -v fzf >/dev/null 2>&1; then
+  "$TMUX_BIN" display-message "tmux-pilot: fzf not found (optional, for fuzzy finder). Install: brew install fzf"
+fi
+
 "$TMUX_BIN" bind-key Tab run-shell "bash '${CURRENT_DIR}/scripts/toggle-sidebar.sh'"
 "$TMUX_BIN" bind-key T run-shell "bash '${CURRENT_DIR}/scripts/refresh.sh'"
 "$TMUX_BIN" bind-key R run-shell "bash '${CURRENT_DIR}/scripts/rename.sh'"
+"$TMUX_BIN" bind-key F display-popup -E -w 80% -h 60% -T " Jump to window " \
+  "bash '${CURRENT_DIR}/scripts/fuzzy-find.sh' standalone"
 
 # Auto-start daemon if not already running
 if ! { [[ -f "$PID_FILE" ]] && kill -0 "$(cat "$PID_FILE" 2>/dev/null)" 2>/dev/null; }; then

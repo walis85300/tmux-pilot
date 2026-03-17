@@ -9,9 +9,11 @@ Titles are generated **once** (5 minutes after a window opens) and stay put. No 
 ```
 ┌──────────────────────────┬───────────────────────────────────────────┐
 │ ▸ work                   │                                           │
-│   ▸ 1 pytest auth tests  │  $ pytest tests/auth/ -v                  │
+│   ▸ ● 1 pytest auth [2] │  $ pytest tests/auth/ -v                  │
 │       3 failing, fixing…  │  FAILED test_jwt.py::test_refresh         │
 │       ~/projects/api      │  ...                                      │
+│       ├─ ● 0 pytest       │                                           │
+│       └─   1 vim          │                                           │
 │                           │                                           │
 │     2 docker compose up   │                                           │
 │       All services green  │                                           │
@@ -22,8 +24,8 @@ Titles are generated **once** (5 minutes after a window opens) and stay put. No 
 │       Drafting v2 docs    │                                           │
 │       ~/oss/my-proj       │                                           │
 │                           │                                           │
-│ ↑↓/jk nav  ⏎ jump        │                                           │
-│ q hide                    │                                           │
+│                           │                                           │
+│                    ? help │                                           │
 └──────────────────────────┴───────────────────────────────────────────┘
  1  pytest auth tests    2  docker compose up            ← status bar
 ```
@@ -41,18 +43,22 @@ Titles are generated **once** (5 minutes after a window opens) and stay put. No 
 | Event | What happens |
 |---|---|
 | New window created | Title is generated **once**, 5 min later |
-| `prefix + Alt-n` | Regenerate title for current window now |
-| `prefix + Alt-r` | Manually rename + **pin** (never auto-overwritten) |
+| `prefix + T` | Regenerate title for current window now |
+| `prefix + R` | Manually rename + **pin** (never auto-overwritten) |
 | Pinned window + scheduled generation | Skipped — your name wins |
-| `prefix + Alt-n` on pinned window | Unpins and regenerates |
+| `prefix + T` on pinned window | Unpins and regenerates |
+| Multi-pane window | All panes are captured for a holistic title |
 
 No daemon. No polling loop. One API call per window, ever.
 
 ## Requirements
 
-- **tmux** >= 3.0
-- **bash** >= 4.0
-- **[Claude Code](https://docs.anthropic.com/en/docs/claude-code)** installed and authenticated
+| Dependency | Required | Install |
+|---|---|---|
+| **tmux** >= 3.2 | Yes | `brew install tmux` |
+| **bash** >= 3.2 | Yes | Ships with macOS |
+| **[Claude Code](https://docs.anthropic.com/en/docs/claude-code)** | Yes | `npm install -g @anthropic-ai/claude-code` |
+| **[fzf](https://github.com/junegunn/fzf)** | Optional (fuzzy finder) | `brew install fzf` |
 
 ```sh
 # Install Claude Code
@@ -60,7 +66,12 @@ npm install -g @anthropic-ai/claude-code
 
 # Authenticate (one time)
 claude
+
+# Install fzf (optional, for fuzzy finder)
+brew install fzf
 ```
+
+The plugin checks for dependencies at startup and shows a message if anything is missing.
 
 ## Install
 
@@ -69,9 +80,9 @@ claude
 Add to `~/.tmux.conf` **after** the TPM `run` line:
 
 ```tmux
+set -g @plugin 'walis85300/tmux-pilot'
 run '~/.tmux/plugins/tpm/tpm'
 
-set -g @plugin 'walis85300/tmux-pilot'
 run-shell '~/.tmux/plugins/tmux-pilot/tmux-ai-nav.tmux'
 ```
 
@@ -95,11 +106,14 @@ run-shell '~/.tmux/plugins/tmux-pilot/tmux-ai-nav.tmux'
 
 ## Keybindings
 
+### Global (work anywhere)
+
 | Key | Action |
 |---|---|
 | `prefix + Tab` | Toggle sidebar |
-| `prefix + Alt-n` | Regenerate AI title for current window |
-| `prefix + Alt-r` | Manually rename and pin current window |
+| `prefix + T` | Regenerate AI title for current window |
+| `prefix + R` | Manually rename and pin current window |
+| `prefix + F` | Fuzzy find windows (requires fzf) |
 
 ### Sidebar navigation
 
@@ -107,8 +121,41 @@ run-shell '~/.tmux/plugins/tmux-pilot/tmux-ai-nav.tmux'
 |---|---|
 | `j` / `↓` | Move down |
 | `k` / `↑` | Move up |
-| `Enter` | Jump to window |
+| `Enter` | Jump to window / expand panes |
+| `x` | Kill window or pane (with confirmation) |
+| `:` | Fuzzy find windows |
+| `/` | Command mode |
+| `Esc` | Collapse expanded panes |
+| `?` | Toggle help |
 | `q` | Hide sidebar |
+
+### Sidebar commands (press `/` then type)
+
+| Command | Action |
+|---|---|
+| `/new <name>` | Create a new session |
+| `/win` | New window in selected session |
+| `/split` | Horizontal split |
+| `/vs` | Vertical split |
+| `/rename <title>` | Rename and pin window title |
+| `/title` | Regenerate AI title |
+
+## Features
+
+### AI-powered window titles
+Windows are automatically named based on what's actually running in them. Multi-pane windows get a holistic summary covering all panes.
+
+### Expandable pane tree
+Windows with multiple panes show a `[N]` badge. Press Enter to expand and see individual panes with their commands and paths. Press Enter on a pane to jump directly to it.
+
+### Fuzzy finder
+Press `:` in the sidebar or `prefix + F` anywhere to search across all window titles and summaries with fzf. Enter jumps, Tab selects in the sidebar.
+
+### Sidebar follows you
+The sidebar automatically moves to your current window when you switch sessions — no need to close and reopen.
+
+### Instant updates
+tmux hooks trigger sidebar redraws immediately when you switch windows, split panes, or rename windows. No polling delay.
 
 ## Configuration
 
@@ -126,14 +173,16 @@ export TMUX_AI_NAV_TMUX_BIN=tmux
 ## Architecture
 
 ```
-tmux-ai-nav.tmux            # Entry point: keybindings + hooks
+tmux-ai-nav.tmux            # Entry point: keybindings + hooks + dep checks
 scripts/
+  toggle-sidebar.sh          # Show/hide/move the sidebar panel
+  sidebar.sh                 # Interactive sidebar UI with navigation
+  fuzzy-find.sh              # fzf-powered window search
   schedule.sh                # Sleeps N seconds, then calls generate-title.sh
-  generate-title.sh          # Captures pane → calls Claude → renames window
+  generate-title.sh          # Captures pane(s) → calls Claude → renames window
   refresh.sh                 # Manual trigger: regenerate title for current window
   rename.sh                  # Manual rename + pin (blocks auto-overwrite)
-  toggle-sidebar.sh          # Show/hide the sidebar panel
-  sidebar.sh                 # Interactive sidebar UI
+  daemon.sh                  # Background process for auto-titling new windows
 lib/
   api.sh                     # claude -p --model haiku wrapper
 ```
@@ -142,6 +191,9 @@ lib/
 - `{session}_{window}.title` — AI-generated title
 - `{session}_{window}.summary` — One-line summary
 - `{session}_{window}.pinned` — Marker: this title was set manually
+- `sidebar.pane_id` — Sidebar pane ID for self-exclusion
+- `sidebar.pid` — Sidebar process PID for signal-based redraws
+- `fuzzy.result` — Temp file for fuzzy finder IPC
 
 ## Troubleshooting
 
@@ -155,11 +207,16 @@ bash ~/.tmux/plugins/tmux-pilot/scripts/refresh.sh
 # Verify claude works
 claude -p --model haiku "say hello"
 
+# Verify fzf works
+echo "test" | fzf
+
 # Reset everything
 rm -rf /tmp/tmux-ai-nav && tmux source-file ~/.tmux.conf
 ```
 
 **Keybinding lost after reload?** Make sure `run-shell` is **after** `run '~/.tmux/plugins/tpm/tpm'`.
+
+**Sidebar needs two presses?** The sidebar may have been left in another session. The plugin now auto-moves it to your current window.
 
 ## License
 

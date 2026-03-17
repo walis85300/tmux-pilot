@@ -352,6 +352,7 @@ build_and_render() {
     bottom_bar+=" ${GREEN}⏎${RESET}    ${DIM}jump / expand${RESET}"$'\n'
     bottom_bar+=" ${GREEN}x${RESET}    ${DIM}kill${RESET}"$'\n'
     bottom_bar+=" ${GREEN}esc${RESET}  ${DIM}collapse${RESET}"$'\n'
+    bottom_bar+=" ${GREEN}:${RESET}    ${DIM}fuzzy find${RESET}"$'\n'
     bottom_bar+=" ${GREEN}q${RESET}    ${DIM}hide sidebar${RESET}"$'\n'
     bottom_bar+=" ${GREEN}?${RESET}    ${DIM}close help${RESET}"$'\n'
     bottom_bar+="${sep}${RESET}"$'\n'
@@ -361,7 +362,7 @@ build_and_render() {
     bottom_bar+=" ${MAGENTA}/vs${RESET}           ${DIM}v-split${RESET}"$'\n'
     bottom_bar+=" ${MAGENTA}/rename${RESET} ${YELLOW}<t>${RESET}   ${DIM}pin title${RESET}"$'\n'
     bottom_bar+=" ${MAGENTA}/title${RESET}        ${DIM}AI regen${RESET}"
-    local help_lines=15
+    local help_lines=16
     local help_row=$((pane_height - help_lines))
     [[ $help_row -lt 2 ]] && help_row=2
     output+="$(printf '\033[%d;1H' "$help_row")${bottom_bar}"
@@ -468,6 +469,36 @@ while true; do
         read_command
         if [[ -n "$CMD_INPUT" ]]; then
           exec_command "$CMD_INPUT"
+        fi
+        ;;
+      ':') # Fuzzy finder
+        FZF_BIN=$(command -v fzf 2>/dev/null)
+        if [[ -z "$FZF_BIN" ]]; then
+          "$TMUX_BIN" display-message "fzf required: brew install fzf" 2>/dev/null
+        else
+          rm -f "$CACHE_DIR/fuzzy.result"
+          "$TMUX_BIN" display-popup -E -w 80% -h 60% -T " Jump to window " \
+            "bash '${PLUGIN_DIR}/scripts/fuzzy-find.sh'"
+          if [[ -f "$CACHE_DIR/fuzzy.result" ]]; then
+            result=$(cat "$CACHE_DIR/fuzzy.result")
+            action="${result%%:*}"
+            fz_target="${result#*:}"
+            if [[ "$action" == "JUMP" ]]; then
+              "$TMUX_BIN" switch-client -t "$fz_target" 2>/dev/null
+              "$TMUX_BIN" select-window -t "$fz_target" 2>/dev/null
+            elif [[ "$action" == "SELECT" ]]; then
+              # Find target index in TARGETS array and move cursor
+              local i=0
+              for t in "${TARGETS[@]}"; do
+                if [[ "$t" == "$fz_target" ]]; then
+                  selected=$i
+                  break
+                fi
+                i=$((i + 1))
+              done
+            fi
+            rm -f "$CACHE_DIR/fuzzy.result"
+          fi
         fi
         ;;
       '?') # Toggle help

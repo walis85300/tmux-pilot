@@ -367,7 +367,7 @@ build_and_render() {
     [[ $help_row -lt 2 ]] && help_row=2
     output+="$(printf '\033[%d;1H' "$help_row")${bottom_bar}"
   else
-    output+="$(printf '\033[%d;1H' "$pane_height")${DIM}? help${RESET}"
+    output+="$(printf '\033[%d;1H' "$pane_height")${DIM}: fuzzy  ? help${RESET}"
   fi
 
   # Fallback if selected was never set
@@ -409,11 +409,18 @@ while true; do
       '') # Enter — expand/collapse or jump
         if [[ $selected -lt $total ]]; then
           target="${TARGETS[$selected]}"
+          # Check if target is already the active window (skip jump to avoid flicker)
+          current_sess=$("$TMUX_BIN" display-message -p '#{session_name}' 2>/dev/null)
+          current_win=$("$TMUX_BIN" display-message -p '#{window_index}' 2>/dev/null)
+          current_target="${current_sess}:${current_win}"
+
           if [[ "$target" == *.* ]]; then
             # Pane target: jump to that specific pane
             local_win="${target%%.*}"
-            "$TMUX_BIN" switch-client -t "$local_win" 2>/dev/null
-            "$TMUX_BIN" select-window -t "$local_win" 2>/dev/null
+            if [[ "$local_win" != "$current_target" ]]; then
+              "$TMUX_BIN" switch-client -t "$local_win" 2>/dev/null
+              "$TMUX_BIN" select-window -t "$local_win" 2>/dev/null
+            fi
             "$TMUX_BIN" select-pane -t "$target" 2>/dev/null
           else
             # Window target: check pane count (subtract sidebar if present)
@@ -431,9 +438,11 @@ while true; do
                 EXPANDED_LIST="${EXPANDED_LIST}|${target}|"
               fi
             else
-              # Single pane: jump directly
-              "$TMUX_BIN" switch-client -t "$target" 2>/dev/null
-              "$TMUX_BIN" select-window -t "$target" 2>/dev/null
+              # Single pane: only jump if not already there
+              if [[ "$target" != "$current_target" ]]; then
+                "$TMUX_BIN" switch-client -t "$target" 2>/dev/null
+                "$TMUX_BIN" select-window -t "$target" 2>/dev/null
+              fi
             fi
           fi
         fi

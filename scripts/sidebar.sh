@@ -197,7 +197,7 @@ exec_command() {
 }
 
 short_path() {
-  local p="${1/#$HOME/\~}"
+  local p="${1/#$HOME/~}"
   local max="${2:-20}"
   if [[ ${#p} -gt $max ]]; then
     printf '…%s' "${p: -$((max - 1))}"
@@ -415,8 +415,13 @@ while true; do
             "$TMUX_BIN" select-window -t "$local_win" 2>/dev/null
             "$TMUX_BIN" select-pane -t "$target" 2>/dev/null
           else
-            # Window target: check pane count
+            # Window target: check pane count (subtract sidebar if present)
             pane_count=$("$TMUX_BIN" list-panes -t "$target" 2>/dev/null | wc -l | tr -d ' ')
+            if [[ -n "$MY_PANE_ID" ]]; then
+              local sidebar_here
+              sidebar_here=$("$TMUX_BIN" list-panes -t "$target" -F '#{pane_id}' 2>/dev/null | grep -c "^${MY_PANE_ID}$")
+              pane_count=$((pane_count - sidebar_here))
+            fi
             if [[ "$pane_count" -gt 1 ]]; then
               # Toggle expand/collapse
               if [[ "$EXPANDED_LIST" == *"|${target}|"* ]]; then

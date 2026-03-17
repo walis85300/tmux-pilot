@@ -174,7 +174,7 @@ build_and_render() {
     output+=$'\n'
   done <<< "$sessions"
 
-  output+="${DIM}↑↓/jk nav  ⏎ expand/jump  Esc collapse  q hide${RESET}"
+  output+="${DIM}↑↓/jk nav  ⏎ expand/jump  x kill  Esc collapse  q hide${RESET}"
 
   # Fallback if selected was never set
   [[ $selected -eq -1 ]] && selected=0
@@ -235,6 +235,33 @@ while true; do
               # Single pane: jump directly
               "$TMUX_BIN" switch-client -t "$target" 2>/dev/null
               "$TMUX_BIN" select-window -t "$target" 2>/dev/null
+            fi
+          fi
+        fi
+        ;;
+      'x') # Kill window or pane with confirmation
+        if [[ $selected -lt $total ]]; then
+          target="${TARGETS[$selected]}"
+          if [[ "$target" == *.* ]]; then
+            # Pane target
+            printf '\033[H\033[J'
+            printf "${BOLD}${YELLOW}Kill pane ${target}? (y/n)${RESET} "
+            IFS= read -rsn1 confirm
+            if [[ "$confirm" == "y" ]]; then
+              "$TMUX_BIN" kill-pane -t "$target" 2>/dev/null
+              # Return focus to the sidebar pane
+              [[ -n "$MY_PANE_ID" ]] && "$TMUX_BIN" select-pane -t "$MY_PANE_ID" 2>/dev/null
+            fi
+          else
+            # Window target
+            printf '\033[H\033[J'
+            printf "${BOLD}${YELLOW}Kill window ${target}? (y/n)${RESET} "
+            IFS= read -rsn1 confirm
+            if [[ "$confirm" == "y" ]]; then
+              "$TMUX_BIN" kill-window -t "$target" 2>/dev/null
+              unset 'EXPANDED[${target}]' 2>/dev/null
+              # Return focus to the sidebar pane
+              [[ -n "$MY_PANE_ID" ]] && "$TMUX_BIN" select-pane -t "$MY_PANE_ID" 2>/dev/null
             fi
           fi
         fi

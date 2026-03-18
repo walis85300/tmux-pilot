@@ -65,7 +65,8 @@ SIDEBAR_SIGNAL="run-shell -b 'PF=${CACHE_DIR}/sidebar.pid; [ -f \$PF ] && kill -
 SIDEBAR_RELOCATE="run-shell -b 'bash ${CURRENT_DIR}/scripts/relocate-sidebar.sh'"
 "$TMUX_BIN" set-hook -g window-renamed           "$SIDEBAR_SIGNAL"
 "$TMUX_BIN" set-hook -g after-select-pane        "$SIDEBAR_SIGNAL"
-"$TMUX_BIN" set-hook -g after-split-window       "$SIDEBAR_SIGNAL"
+SIDEBAR_FIX_SPLIT="run-shell -b 'bash ${CURRENT_DIR}/scripts/fix-sidebar-split.sh'"
+"$TMUX_BIN" set-hook -g after-split-window       "$SIDEBAR_FIX_SPLIT"
 "$TMUX_BIN" set-hook -g after-kill-pane          "$SIDEBAR_SIGNAL"
 "$TMUX_BIN" set-hook -g pane-focus-in            "$SIDEBAR_SIGNAL"
 # Enforce sidebar width on terminal resize

@@ -56,12 +56,20 @@ context="Session: ${session_name}"
 [[ -n "$cwd_short" ]] && context+=", CWD: ${cwd_short}"
 [[ -n "$git_branch" ]] && context+=", Branch: ${git_branch}"
 
-# --- Capture pane content ---
+# --- Capture pane content (exclude sidebar pane) ---
+
+sidebar_pane_id=$(cat "$CACHE_DIR/sidebar.pane_id" 2>/dev/null || true)
 
 pane_list=$("$TMUX_BIN" list-panes -t "$target" \
   -F '#{pane_id}|#{pane_index}|#{pane_active}' 2>/dev/null) || exit 0
 
-pane_count=$(echo "$pane_list" | wc -l | tr -d ' ')
+# Filter out the sidebar pane if present in this window
+if [[ -n "$sidebar_pane_id" ]]; then
+  pane_list=$(echo "$pane_list" | grep -v "^${sidebar_pane_id}|")
+fi
+
+pane_count=$(echo "$pane_list" | grep -c . || true)
+[[ "$pane_count" -eq 0 ]] && exit 0
 
 if [[ "$pane_count" -le 1 ]]; then
   active_pane=$(echo "$pane_list" | grep '|1$' | cut -d'|' -f1)

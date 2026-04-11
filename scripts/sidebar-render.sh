@@ -67,11 +67,16 @@ build_and_render() {
       local summary
       summary=$(cache_read "$CACHE_DIR" "$ck" "summary")
 
+      # Truncation widths account for indent depth per line type:
+      #   window name line: 4-6 chars prefix ("  ▸ " or "    ") + index + space
+      #   summary/path line: 6 chars indent ("      ")
+      local line_max=$((PANE_WIDTH - 6))
+      [[ $line_max -lt 10 ]] && line_max=10
       local sp
-      sp=$(short_path "$pane_path" "$MAX_TEXT")
+      sp=$(short_path "$pane_path" "$line_max")
 
-      [[ ${#win_name} -gt $MAX_TEXT ]] && win_name="${win_name:0:$((MAX_TEXT - 1))}…"
-      [[ ${#summary} -gt $MAX_TEXT ]] && summary="${summary:0:$((MAX_TEXT - 1))}…"
+      [[ ${#win_name} -gt $line_max ]] && win_name="${win_name:0:$((line_max - 1))}…"
+      [[ ${#summary} -gt $line_max ]] && summary="${summary:0:$((line_max - 1))}…"
 
       local active_dot=""
       if [[ "$is_active" == "1" ]] && [[ "$sess" == "$current_session" ]]; then
@@ -132,7 +137,7 @@ build_and_render() {
           [[ $pi -eq $((pane_total - 1)) ]] && connector="└─"
 
           local psp
-          psp=$(short_path "$p_path" "$((MAX_TEXT - 10))")
+          psp=$(short_path "$p_path" "$((PANE_WIDTH - 16))")
 
           local pane_active_marker=""
           [[ "$p_active" == "1" ]] && pane_active_marker="${GREEN}●${RESET} "

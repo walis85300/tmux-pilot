@@ -4,7 +4,7 @@
 
 **tmux-pilot** uses [Claude Code](https://docs.anthropic.com/en/docs/claude-code) to read your terminal output and name your tmux windows with what's actually happening in them — not just "bash" or "zsh".
 
-Titles are generated **once** (5 minutes after a window opens) and stay put. No background daemon eating tokens. You're in control.
+A background daemon checks for untitled windows every 30 seconds and generates titles automatically. Each window is titled once and never again unless you ask. A built-in watchdog restarts the daemon if it ever dies.
 
 ```
 ┌──────────────────────────┬───────────────────────────────────────────┐
@@ -42,14 +42,16 @@ Titles are generated **once** (5 minutes after a window opens) and stay put. No 
 
 | Event | What happens |
 |---|---|
-| New window created | Title is generated **once**, 5 min later |
+| New window created | Daemon detects it within 30s and generates a title |
 | `prefix + T` | Regenerate title for current window now |
 | `prefix + R` | Manually rename + **pin** (never auto-overwritten) |
-| Pinned window + scheduled generation | Skipped — your name wins |
+| Pinned window | Daemon skips it — your name wins |
 | `prefix + T` on pinned window | Unpins and regenerates |
-| Multi-pane window | All panes are captured for a holistic title |
+| Multi-pane window | All panes captured for a holistic title |
+| Session closes | Daemon keeps running for other sessions |
+| Daemon dies | Watchdog restarts it on next window switch |
 
-No daemon. No polling loop. One API call per window, ever.
+Title generation uses Claude Sonnet with rich context: session name, CWD, git branch, and up to 60 lines of terminal output. Titles are sanitized (markdown stripped, truncated to 30 chars) before applying.
 
 ## Requirements
 
@@ -70,8 +72,6 @@ claude
 # Install fzf (optional, for fuzzy finder)
 brew install fzf
 ```
-
-The plugin checks for dependencies at startup and shows a message if anything is missing.
 
 ## Install
 
@@ -140,23 +140,6 @@ run-shell '~/.tmux/plugins/tmux-pilot/pilot.tmux'
 | `/rename <title>` | Rename and pin window title |
 | `/title` | Regenerate AI title |
 
-## Features
-
-### AI-powered window titles
-Windows are automatically named based on what's actually running in them. Multi-pane windows get a holistic summary covering all panes.
-
-### Expandable pane tree
-Windows with multiple panes show a `[N]` badge. Press Enter to expand and see individual panes with their commands and paths. Press Enter on a pane to jump directly to it.
-
-### Fuzzy finder
-Press `:` in the sidebar or `prefix + F` anywhere to search across all window titles and summaries with fzf. Enter jumps, Tab selects in the sidebar.
-
-### Sidebar follows you
-The sidebar automatically moves to your current window when you switch sessions — no need to close and reopen.
-
-### Instant updates
-tmux hooks trigger sidebar redraws immediately when you switch windows, split panes, or rename windows. No polling delay.
-
 ## Configuration
 
 ### Keybindings
@@ -170,43 +153,48 @@ set -g @pilot-key-rename  "R"     # Manual rename & pin (default: R)
 set -g @pilot-key-fuzzy   "F"     # Fuzzy find windows (default: F)
 ```
 
-### Advanced
+### Environment variables
 
 ```sh
-# Delay before auto-generating title (default: 300 = 5 min)
-export TMUX_AI_NAV_DELAY=300
-
-# Custom claude binary
-export TMUX_AI_NAV_CLAUDE_BIN=claude
+# Custom claude binary (new naming)
+export TMUX_PILOT_CLAUDE_BIN=claude
 
 # Custom tmux binary
-export TMUX_AI_NAV_TMUX_BIN=tmux
+export TMUX_PILOT_TMUX_BIN=tmux
+
+# Legacy naming (still supported)
+export TMUX_AI_NAV_CLAUDE_BIN=claude
 ```
 
 ## Architecture
 
 ```
-pilot.tmux                   # Entry point: keybindings + hooks + dep checks
+pilot.tmux                   # Entry point: keybindings + hooks + daemon + watchdog
 scripts/
-  toggle-sidebar.sh          # Show/hide/move the sidebar panel
-  sidebar.sh                 # Interactive sidebar UI with navigation
-  fuzzy-find.sh              # fzf-powered window search
-  schedule.sh                # Sleeps N seconds, then calls generate-title.sh
-  generate-title.sh          # Captures pane(s) → calls Claude → renames window
+  daemon.sh                  # Background polling loop (30s), auto-titles new windows
+  generate-title.sh          # Captures panes + context → Claude → sanitize → rename
   refresh.sh                 # Manual trigger: regenerate title for current window
   rename.sh                  # Manual rename + pin (blocks auto-overwrite)
-  daemon.sh                  # Background process for auto-titling new windows
+  toggle-sidebar.sh          # Show/hide/move the sidebar panel
+  sidebar.sh                 # Interactive sidebar: main loop + key dispatch
+  sidebar-render.sh          # Sidebar tree rendering (sourced by sidebar.sh)
+  sidebar-commands.sh         # Sidebar command mode (sourced by sidebar.sh)
+  fuzzy-find.sh              # fzf-powered window search
+  safe-split.sh              # Split proxy that protects sidebar
+  relocate-sidebar.sh        # Move sidebar across windows/sessions
+  fix-sidebar-split.sh       # Post-split hook to repair sidebar
+  helpers.sh                 # Shared utilities (sourced, not executed)
 lib/
-  api.sh                     # claude -p --model haiku wrapper
+  api.sh                     # claude -p --model sonnet wrapper (30s timeout)
+  cache.sh                   # Cache key computation + read/write/migrate
 ```
 
-**Cache** lives in `~/.local/state/tmux-pilot/` (XDG-compliant, customizable via `$XDG_STATE_HOME`):
-- `{session}_{window}.title` — AI-generated title
-- `{session}_{window}.summary` — One-line summary
-- `{session}_{window}.pinned` — Marker: this title was set manually
-- `sidebar.pane_id` — Sidebar pane ID for self-exclusion
-- `sidebar.pid` — Sidebar process PID for signal-based redraws
-- `fuzzy.result` — Temp file for fuzzy finder IPC
+**Cache** lives in `~/.local/state/tmux-pilot/` (XDG-compliant):
+- `{session}::{window_id}.title` — AI-generated title
+- `{session}::{window_id}.summary` — One-line summary
+- `{session}::{window_id}.pinned` — Marker: this title was set manually
+- `daemon.pid` — Daemon process for lifecycle management
+- `sidebar.pid` / `sidebar.pane_id` — Sidebar process for signal-based redraws
 
 ## Troubleshooting
 
@@ -218,7 +206,7 @@ cat ~/.local/state/tmux-pilot/daemon.log
 bash ~/.tmux/plugins/tmux-pilot/scripts/refresh.sh
 
 # Verify claude works
-claude -p --model haiku "say hello"
+claude -p --model sonnet "say hello"
 
 # Verify fzf works
 echo "test" | fzf
@@ -227,9 +215,11 @@ echo "test" | fzf
 rm -rf ~/.local/state/tmux-pilot && tmux source-file ~/.tmux.conf
 ```
 
+**Daemon not running?** The watchdog restarts it on window switch. Or force restart: `tmux source-file ~/.tmux.conf`
+
 **Keybinding lost after reload?** Make sure `run-shell` is **after** `run '~/.tmux/plugins/tpm/tpm'`.
 
-**Sidebar needs two presses?** The sidebar may have been left in another session. The plugin now auto-moves it to your current window.
+**Sidebar needs two presses?** The sidebar may have been left in another session. The plugin auto-moves it to your current window.
 
 ## License
 

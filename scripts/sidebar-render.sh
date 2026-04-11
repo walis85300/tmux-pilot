@@ -19,6 +19,7 @@ short_path() {
 }
 
 build_and_render() {
+  refresh_dimensions
   TARGETS=()
 
   local current_session current_window

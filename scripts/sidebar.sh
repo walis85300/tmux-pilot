@@ -14,10 +14,16 @@ source "${PLUGIN_DIR}/lib/cache.sh"
 CACHE_DIR=$(get_state_dir)
 MY_PANE_ID=$(cat "$CACHE_DIR/sidebar.pane_id" 2>/dev/null)
 
-# Dynamic truncation based on actual pane width (6 chars indent)
-PANE_WIDTH=$("$TMUX_BIN" display-message -p '#{pane_width}' 2>/dev/null || tput cols 2>/dev/null || echo 28)
-MAX_TEXT=$(( PANE_WIDTH - 8 ))
-[[ $MAX_TEXT -lt 10 ]] && MAX_TEXT=10
+# Recalculated on every render cycle to respond to pane resizing
+PANE_WIDTH=28
+MAX_TEXT=20
+
+refresh_dimensions() {
+  PANE_WIDTH=$("$TMUX_BIN" display-message -p '#{pane_width}' 2>/dev/null || tput cols 2>/dev/null || echo 28)
+  MAX_TEXT=$(( PANE_WIDTH - 8 ))
+  [[ $MAX_TEXT -lt 10 ]] && MAX_TEXT=10
+}
+refresh_dimensions
 
 selected=-1           # -1 = not yet initialized, will be set to current window
 EXPANDED_LIST=""      # delimited string for Bash 3.2 compat

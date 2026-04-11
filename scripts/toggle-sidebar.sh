@@ -14,9 +14,6 @@ SIDEBAR_MARKER="$CACHE_DIR/sidebar.pane_id"
 # Sidebar width: configurable, defaults to 35 columns
 SIDEBAR_WIDTH=$(get_tmux_option "@pilot-sidebar-width" "35")
 
-# Get current window ID to check if sidebar is local
-CURRENT_WINDOW=$("$TMUX_BIN" display-message -p '#{window_id}' 2>/dev/null)
-
 # Check if sidebar pane AND process are alive
 sidebar_alive() {
   [[ -f "$SIDEBAR_MARKER" ]] || return 1

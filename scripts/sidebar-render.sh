@@ -1,3 +1,4 @@
+#!/usr/bin/env bash
 # sidebar-render.sh — Data fetching, tree construction, and ANSI rendering.
 # Sourced by sidebar.sh. Relies on globals: TARGETS, selected, EXPANDED_LIST,
 # CACHE_DIR, MY_PANE_ID, MAX_TEXT, PANE_WIDTH, SHOW_HELP, LAST_OUTPUT,

@@ -1,3 +1,4 @@
+#!/usr/bin/env bash
 # sidebar-commands.sh — Command-mode input and execution for the sidebar.
 # Sourced by sidebar.sh. Relies on globals: TARGETS, selected, MY_PANE_ID,
 # PLUGIN_DIR, TMUX_BIN, MAGENTA, YELLOW, GREEN, DIM, BOLD, RESET.
